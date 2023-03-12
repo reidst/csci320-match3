@@ -3,62 +3,54 @@
 
 mod vga_buffer;
 mod serial;
+mod match3game;
 
 use lazy_static::lazy_static;
-use pc_keyboard::DecodedKey;
+use match3game::{Game, InputAction};
+use pc_keyboard::{DecodedKey, KeyCode};
 use csci320_match3::HandlerTable;
 use spin::Mutex;
 use vga_buffer::{plot, ColorCode, Color};
 
-const COLUMN_GAP: usize = 2;
-const GREEN_SHIFT_SPEED: usize = 4;
+use crate::vga_buffer::{plot_num_right_justified, plot_str};
 
-lazy_static! {
-    static ref RAND: Mutex<Random> = Mutex::new(Random::new(1234));
-}
+const TICK_PERIOD: u64 = 4;
+
 lazy_static! {
     static ref TICK: Mutex<u64> = Mutex::new(0);
 }
 lazy_static! {
-    static ref COLOR_BARS: Mutex<[usize; vga_buffer::BUFFER_WIDTH]> = 
-        Mutex::new([(vga_buffer::BUFFER_HEIGHT/2) as usize; vga_buffer::BUFFER_WIDTH]);
+    static ref GAME: Mutex<Game> = Mutex::new(Game::new(1));
 }
 
 fn start() {
-    // println!("Hello, world!");
+    draw_game(&*GAME.lock());
 }
 
 fn tick() {
-    for row in 0..vga_buffer::BUFFER_HEIGHT {
-        for col in 0..vga_buffer::BUFFER_WIDTH {
-            let character = RAND.lock().range(48,58) as u8 as char;
-            let number_color = if col % COLUMN_GAP != 0 {
-                Color::Black
-            } else if row < COLOR_BARS.lock()[col] {
-                Color::Green
-            } else {
-                Color::DarkGray
-            };
-            plot(character, col, row, ColorCode::new(number_color, Color::Black))
+    if *TICK.lock() % TICK_PERIOD == 0 {
+        let drop = GAME.lock().drop_step();
+        let fill = GAME.lock().fill_step();
+        let settled = !drop && !fill;
+        if settled {
+            GAME.lock().score_matches();
         }
     }
-    for _ in 0..GREEN_SHIFT_SPEED {
-        let col = RAND.lock().range(0, vga_buffer::BUFFER_WIDTH as u64) as usize;
-        let old = COLOR_BARS.lock()[col];
-        if RAND.lock().next() %2 == 0 {
-            COLOR_BARS.lock()[col] = if old >= vga_buffer::BUFFER_HEIGHT - 1 { old } else { old + 1};
-        } else {
-            COLOR_BARS.lock()[col] = if old <= 1 { old } else { old - 1};
-        }
-    }
+    draw_game(&*GAME.lock());
     *TICK.lock() += 1;
 }
 
-fn key(_key: DecodedKey) {
-    // match key {
-    //     DecodedKey::Unicode(character) => print!("{}", character),
-    //     DecodedKey::RawKey(key) => print!("{:?}", key),
-    // }
+fn key(key: DecodedKey) {
+    use DecodedKey::*;
+    let action = match key {
+        RawKey(KeyCode::ArrowUp)    | Unicode('w') => Some(InputAction::Up),
+        RawKey(KeyCode::ArrowDown)  | Unicode('s') => Some(InputAction::Down),
+        RawKey(KeyCode::ArrowLeft)  | Unicode('a') => Some(InputAction::Left),
+        RawKey(KeyCode::ArrowRight) | Unicode('d') => Some(InputAction::Right),
+        Unicode('\n') | Unicode(' ') => Some(InputAction::Select),
+        _ => None
+    };
+    if let Some(action) = action { GAME.lock().do_action(action); }
 }
 
 #[no_mangle]
@@ -70,31 +62,67 @@ pub extern "C" fn _start() -> ! {
         .start()
 }
 
-
-/// A simple 64-bit xorshift. Source: https://en.wikipedia.org/wiki/Xorshift#Example_implementation
-struct Random {
-    _state: u64
+fn draw_game(g: &Game) {
+    // board
+    const DRAW_COL_OFFSET: usize = 20;
+    const DRAW_ROW_OFFSET: usize = 0;
+    let board = g.get_board();
+    for col in 0..match3game::BOARD_WIDTH {
+        for row in 0..match3game::BOARD_HEIGHT {
+            let current = board[col][row];
+            let draw_col = col * 5 + DRAW_COL_OFFSET;
+            let draw_row = row * 3 + DRAW_ROW_OFFSET;
+            let highlight = if g.get_cursor().location() == (col, row) {
+                Color::DarkGray
+            } else {
+                Color::Black
+            };
+            if current == 0 {
+                draw_empty(draw_col, draw_row, highlight);
+            } else {
+                let color = Color::from(current + 8);
+                let selected = g.get_cursor().location() == (col, row) 
+                    && g.is_selected() 
+                    && *TICK.lock() % (TICK_PERIOD * 2) < TICK_PERIOD;
+                draw_gem(draw_col, draw_row, color, highlight, selected);
+            }
+        }
+    }
+    // score
+    let ui_code = ColorCode::new(Color::White, Color::DarkGray);
+    plot_str("Score:", 20, vga_buffer::BUFFER_HEIGHT-1, ui_code);
+    plot_num_right_justified(35, g.get_score() as isize * 100, 25, vga_buffer::BUFFER_HEIGHT-1, ui_code);
+    // outline
+    for row in 0..vga_buffer::BUFFER_HEIGHT {
+        plot(' ', DRAW_COL_OFFSET - 1, row, ui_code);
+        plot(' ', DRAW_COL_OFFSET + 40, row, ui_code);
+    }
 }
 
-impl Random {
-    fn new(seed: u64) -> Self {
-        Self { _state: seed }
-    }
-    fn next(&mut self) -> u64 {
-        let mut x = self._state;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self._state = x;
-        x
-    }
-    fn range(&mut self, min: u64, max: u64) -> u64 {
-        let range = max - min;
-        let limit = u64::MAX / range * range;
-        let mut candidate = self.next();
-        while candidate >= limit {
-            candidate = self.next();
+fn draw_gem(c: usize, r: usize, color: Color, highlight: Color, selected: bool) {
+    let code = ColorCode::new(color, highlight);
+    let inverse_code = ColorCode::new(highlight, color);
+    let center_char = if selected { '?' } else { ' ' };
+    plot('/', c, r, code);
+    plot('-', c+1, r, code);
+    plot('-', c+2, r, code);
+    plot('\\', c+3, r, code);
+    plot(' ', c+4, r, code);
+    plot('|', c, r+1, code);
+    plot(center_char, c+1, r+1, inverse_code);
+    plot(center_char, c+2, r+1, inverse_code);
+    plot('|', c+3, r+1, code);
+    plot(' ', c+4, r+1, code);
+    plot('\\', c, r+2, code);
+    plot('-', c+1, r+2, code);
+    plot('-', c+2, r+2, code);
+    plot('/', c+3, r+2, code);
+    plot(' ', c+4, r+2, code);
+}
+fn draw_empty(c: usize, r: usize, color: Color) {
+    for c in c..c+5 {
+        for r in r..r+3 {
+            plot(' ', c, r, ColorCode::new(color, color));
         }
-        candidate - (candidate / range * range) + min
     }
 }
