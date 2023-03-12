@@ -10,6 +10,7 @@ pub struct Game {
     selected: bool,
     score: usize
 }
+
 impl Game { // TODO: most of these shouldn't be public
     pub fn new(seed: u64) -> Self {
         Self{
@@ -21,10 +22,13 @@ impl Game { // TODO: most of these shouldn't be public
             score: 0
         }
     }
+
+    /// Find, score, and remove all existing matches.
     pub fn score_matches(&mut self) {
         self.calculate_marks();
         self.remove_marked();
     }
+
     /// Find and mark any matches on the board; returns the score of those matches.
     fn calculate_marks(&mut self) {
         let mut points: usize = 0;
@@ -66,6 +70,7 @@ impl Game { // TODO: most of these shouldn't be public
         }
         self.score += points;
     }
+
     /// Scoring calculator:
     /// match-3 = 3 points
     /// match-4 = 3 + 4 = 7 points
@@ -74,6 +79,7 @@ impl Game { // TODO: most of these shouldn't be public
         let x = match_len as isize;
         (x*x + x - 6) as usize / 2
     }
+
     /// Erase all marked gems, then reset the markings
     fn remove_marked(&mut self) {
         for col in 0..BOARD_WIDTH {
@@ -85,6 +91,7 @@ impl Game { // TODO: most of these shouldn't be public
             }
         }
     }
+
     /// Move all suspended gems down one space; returns whether any gems were moved.
     pub fn drop_step(&mut self) -> bool {
         let mut ongoing = false;
@@ -105,6 +112,8 @@ impl Game { // TODO: most of these shouldn't be public
         }
         ongoing
     }
+
+    /// Drop at most one gem into the top of all available columns; returns whether any gems were dropped.
     pub fn fill_step(&mut self) -> bool {
         let mut any: bool = false;
         for col in 0..BOARD_WIDTH {
@@ -115,11 +124,15 @@ impl Game { // TODO: most of these shouldn't be public
         }
         any
     }
+
+    /// Swaps the gem at (c,r) with the gem at the cursor's location.
     fn swap_cursor_raw(&mut self, c: usize, r: usize) {
         let temp = self.board[self.cursor.0][self.cursor.1];
         self.board[self.cursor.0][self.cursor.1] = self.board[c][r];
         self.board[c][r] = temp;
     }
+
+    /// Swaps the piece under the cursor and the piece in the `dir` direction from the cursor.
     fn swap_cursor(&mut self, dir: InputAction) {
         match dir {
             InputAction::Up => {
@@ -145,19 +158,22 @@ impl Game { // TODO: most of these shouldn't be public
             _ => {}
         }
     }
+
     /// Check if the swap that was just performed in the given direction makes any match.
     fn makes_match(&self, dir: InputAction) -> bool {
         let other_pos = match dir {
-            InputAction::Up => (self.cursor.0, self.cursor.1 - 1),
-            InputAction::Down => (self.cursor.0, self.cursor.1 + 1),
-            InputAction::Left => (self.cursor.0 - 1, self.cursor.1),
-            InputAction::Right => (self.cursor.0 + 1, self.cursor.1),
-            InputAction::Select => (self.cursor.0, self.cursor.1),
+            InputAction::Up    if self.cursor.1 > 0                 => (self.cursor.0, self.cursor.1 - 1),
+            InputAction::Down  if self.cursor.1 < BOARD_HEIGHT - 1  => (self.cursor.0, self.cursor.1 + 1),
+            InputAction::Left  if self.cursor.0 > 0                 => (self.cursor.0 - 1, self.cursor.1),
+            InputAction::Right if self.cursor.0 < BOARD_WIDTH - 1   => (self.cursor.0 + 1, self.cursor.1),
+            _ => (self.cursor.0, self.cursor.1),
         };
         self.check_for_match(self.cursor.0, self.cursor.1) || self.check_for_match(other_pos.0, other_pos.1)
     }
+
     /// Check if the piece at (c,r) is part of a match.
     fn check_for_match(&self, c: usize, r: usize) -> bool {
+        if c >= BOARD_WIDTH || r >= BOARD_HEIGHT { return false }
         let current = self.board[c][r];
         // vertical check
         if r >= 2 && self.board[c][r-2] == current && self.board[c][r-1] == current {
@@ -177,18 +193,24 @@ impl Game { // TODO: most of these shouldn't be public
         }
         false
     }
+
     pub fn is_selected(&self) -> bool {
         self.selected
     }
+
     pub fn get_board(&self) -> [[u8; BOARD_HEIGHT]; BOARD_WIDTH] {
         self.board
     }
+
     pub fn get_cursor(&self) -> &GameCursor {
         &self.cursor
     }
+
     pub fn get_score(&self) -> usize {
         self.score
     }
+
+    /// Handles actions performed on the game.
     pub fn do_action(&mut self, action: InputAction) {
         match action {
             InputAction::Select => self.selected = !self.selected,
