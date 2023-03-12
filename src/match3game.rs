@@ -8,6 +8,7 @@ pub struct Game {
     rand: Random,
     cursor: GameCursor,
     selected: bool,
+    alive: bool,
     score: usize
 }
 
@@ -19,6 +20,7 @@ impl Game { // TODO: most of these shouldn't be public
             rand: Random::new(seed),
             cursor: GameCursor::new(),
             selected: false,
+            alive: true,
             score: 0
         }
     }
@@ -194,8 +196,50 @@ impl Game { // TODO: most of these shouldn't be public
         false
     }
 
+    /// Check if there are any valid moves left
+    pub fn check_for_game_over(&mut self) {
+        self.alive = false;
+        let loc = self.cursor.location();
+        // search for vertical moves
+        for col in 0..BOARD_WIDTH {
+            for row in 0..BOARD_HEIGHT-1 {
+                self.cursor.set_cursor(col, row);
+                self.swap_cursor(InputAction::Down);
+                if self.makes_match(InputAction::Down) {
+                    self.alive = true;
+                }
+                self.swap_cursor(InputAction::Down);
+                if self.alive {
+                    self.cursor.set_cursor(loc.0, loc.1);
+                    return
+                }
+            }
+        }
+        // search for horizontal matches
+        self.cursor = GameCursor::new();
+        for row in 0..BOARD_HEIGHT {
+            for col in 0..BOARD_WIDTH-1 {
+                self.cursor.set_cursor(col, row);
+                self.swap_cursor(InputAction::Right);
+                if self.makes_match(InputAction::Right) {
+                    self.alive = true;
+                }
+                self.swap_cursor(InputAction::Right);
+                if self.alive {
+                    self.cursor.set_cursor(loc.0, loc.1);
+                    return
+                }
+            }
+        }
+        self.cursor.set_cursor(loc.0, loc.1);
+    }
+
     pub fn is_selected(&self) -> bool {
         self.selected
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.alive
     }
 
     pub fn get_board(&self) -> [[u8; BOARD_HEIGHT]; BOARD_WIDTH] {
@@ -248,6 +292,10 @@ impl GameCursor {
             InputAction::Right => if self.0 < BOARD_WIDTH - 1 { self.0 += 1; },
             _ => {}
         }
+    }
+    fn set_cursor(&mut self, c: usize, r: usize) {
+        self.0 = c;
+        self.1 = r;
     }
     pub fn location(&self) -> (usize, usize) {
         (self.0, self.1)

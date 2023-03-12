@@ -24,7 +24,7 @@ lazy_static! {
 }
 
 fn start() {
-    draw_game(&*GAME.lock());
+    draw_game(&mut *GAME.lock());
 }
 
 fn tick() {
@@ -33,10 +33,15 @@ fn tick() {
         let fill = GAME.lock().fill_step();
         let settled = !drop && !fill;
         if settled {
+            // only check for game over if board is settled and has no matches
+            let old_score = GAME.lock().get_score();
             GAME.lock().score_matches();
+            if GAME.lock().get_score() == old_score {
+                GAME.lock().check_for_game_over();
+            }
         }
     }
-    draw_game(&*GAME.lock());
+    draw_game(&mut *GAME.lock());
     *TICK.lock() += 1;
 }
 
@@ -80,7 +85,7 @@ fn draw_game(g: &Game) {
             if current == 0 {
                 draw_empty(draw_col, draw_row, highlight);
             } else {
-                let color = Color::from(current + 8);
+                let color = Color::from(current + if g.is_alive() { 8 } else { 0 });
                 let selected = g.get_cursor().location() == (col, row) 
                     && g.is_selected() 
                     && *TICK.lock() % (TICK_PERIOD * 2) < TICK_PERIOD;
@@ -90,8 +95,9 @@ fn draw_game(g: &Game) {
     }
     // score
     let ui_code = ColorCode::new(Color::White, Color::DarkGray);
-    plot_str("Score:", 20, vga_buffer::BUFFER_HEIGHT-1, ui_code);
     plot_num_right_justified(35, g.get_score() as isize * 100, 25, vga_buffer::BUFFER_HEIGHT-1, ui_code);
+    let msg = if g.is_alive() { "Score: " } else {"Game Over! Final Score:" };
+    plot_str(msg, 20, vga_buffer::BUFFER_HEIGHT-1, ui_code);
     // outline
     for row in 0..vga_buffer::BUFFER_HEIGHT {
         plot(' ', DRAW_COL_OFFSET - 1, row, ui_code);
