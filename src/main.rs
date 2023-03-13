@@ -6,56 +6,39 @@ mod serial;
 mod match3game;
 
 use lazy_static::lazy_static;
-use match3game::{Game, InputAction, Direction};
-use pc_keyboard::{DecodedKey, KeyCode};
+use match3game::{GameState, GameStateManager};
+use pc_keyboard::DecodedKey;
 use csci320_match3::HandlerTable;
 use spin::Mutex;
 use vga_buffer::{plot, ColorCode, Color};
 
 use crate::vga_buffer::{plot_num_right_justified, plot_str};
 
-const TICK_PERIOD: u64 = 4;
-
 lazy_static! {
     static ref TICK: Mutex<u64> = Mutex::new(0);
 }
 lazy_static! {
-    static ref GAME: Mutex<Game> = Mutex::new(Game::new(1));
+    static ref GAME: Mutex<GameStateManager> = Mutex::new(GameStateManager::new());
 }
 
+
 fn start() {
-    draw_game(&mut *GAME.lock());
+    println!("Hello, world!");
 }
 
 fn tick() {
-    if *TICK.lock() % TICK_PERIOD == 0 {
-        let drop = GAME.lock().drop_step();
-        let fill = GAME.lock().fill_step();
-        let settled = !drop && !fill;
-        if settled {
-            // only check for game over if board is settled and has no matches
-            let old_score = GAME.lock().get_score();
-            GAME.lock().score_matches();
-            if GAME.lock().get_score() == old_score {
-                GAME.lock().check_for_game_over();
-            }
-        }
+    let gsm = &mut *GAME.lock();
+    gsm.tick(*TICK.lock());
+    vga_buffer::clear_screen();
+    match gsm.get_state() {
+        GameState::EnteringCode => draw_code_menu(gsm),
+        GameState::Playing => draw_game(gsm)
     }
-    draw_game(&mut *GAME.lock());
     *TICK.lock() += 1;
 }
 
 fn key(key: DecodedKey) {
-    use DecodedKey::*;
-    let action = match key {
-        RawKey(KeyCode::ArrowUp)    | Unicode('w') => Some(InputAction::Move(Direction::Up)),
-        RawKey(KeyCode::ArrowDown)  | Unicode('s') => Some(InputAction::Move(Direction::Down)),
-        RawKey(KeyCode::ArrowLeft)  | Unicode('a') => Some(InputAction::Move(Direction::Left)),
-        RawKey(KeyCode::ArrowRight) | Unicode('d') => Some(InputAction::Move(Direction::Right)),
-        Unicode('\n') | Unicode(' ') => Some(InputAction::Select),
-        _ => None
-    };
-    if let Some(action) = action { GAME.lock().do_action(action); }
+    GAME.lock().input_manager(key);
 }
 
 #[no_mangle]
@@ -67,10 +50,18 @@ pub extern "C" fn _start() -> ! {
         .start()
 }
 
-fn draw_game(g: &Game) {
+fn draw_code_menu(gsm: &GameStateManager) {
+    plot_str("Enter a code:", 33, 12, ColorCode::new(Color::White, Color::Black));
+    let code = ""; // TODO
+    plot_str(code, 33, 13, ColorCode::new(Color::Yellow, Color::Black));
+}
+
+fn draw_game(gsm: &GameStateManager) {
     // board
     const DRAW_COL_OFFSET: usize = 20;
     const DRAW_ROW_OFFSET: usize = 0;
+    const SELECT_BLINK_PERIOD: u64 = 4;
+    let g = gsm.get_game();
     let board = g.get_board();
     for col in 0..match3game::BOARD_WIDTH {
         for row in 0..match3game::BOARD_HEIGHT {
@@ -88,7 +79,7 @@ fn draw_game(g: &Game) {
                 let color = Color::from(current + if g.is_alive() { 8 } else { 0 });
                 let selected = g.get_cursor().location() == (col, row) 
                     && g.is_selected() 
-                    && *TICK.lock() % (TICK_PERIOD * 2) < TICK_PERIOD;
+                    && *TICK.lock() % (SELECT_BLINK_PERIOD * 2) < SELECT_BLINK_PERIOD;
                 draw_gem(draw_col, draw_row, color, highlight, selected);
             }
         }

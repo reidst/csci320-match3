@@ -1,6 +1,114 @@
+use pc_keyboard::{DecodedKey, KeyCode};
+
 pub const BOARD_HEIGHT: usize = 8;
 pub const BOARD_WIDTH: usize = 8;
 pub const GEM_COUNT: usize = 7;
+pub const REFRESH_PERIOD: u64 = 4;
+
+#[derive(Clone, Copy)]
+pub enum GameState { EnteringCode, Playing }
+
+pub struct GameStateManager {
+    state: GameState,
+    game_code: GameCode,
+    game: Game
+}
+
+impl GameStateManager {
+    pub fn new() -> Self {
+        Self { state: GameState::EnteringCode, game_code: GameCode::new(), game: Game::new(0) }
+    }
+
+    pub fn input_manager(&mut self, key: DecodedKey) {
+        match self.state {
+            GameState::EnteringCode => {
+                match key {
+                    DecodedKey::Unicode('\n') => self.start_game(),
+                    DecodedKey::Unicode(c) if c.is_ascii_graphic() => self.game_code.type_char(c),
+                    DecodedKey::RawKey(KeyCode::Backspace) => self.game_code.backspace(),
+                    _ => {}
+                }
+            },
+            GameState::Playing => {
+                match key {
+                    DecodedKey::RawKey(KeyCode::Escape) if !self.game.alive => self.return_to_code_menu(),
+                    key => self.game.handle_input(key)
+                }
+            }
+        }
+    }
+
+    pub fn tick(&mut self, current_tick: u64) {
+        match self.state {
+            GameState::EnteringCode => {},
+            GameState::Playing => {
+                if current_tick % REFRESH_PERIOD == 0 {
+                    let drop = self.game.drop_step();
+                    let fill = self.game.fill_step();
+                    let settled = !drop && !fill;
+                    if settled {
+                        // only check for game over if board is settled and has no matches
+                        let old_score = self.game.get_score();
+                        self.game.score_matches();
+                        if self.game.get_score() == old_score {
+                            self.game.check_for_game_over();
+                        }
+                    }
+                }
+            },
+        }
+    }
+
+    fn start_game(&mut self) {
+        let seed = self.game_code.hash();
+        self.game = Game::new(seed);
+        self.state = GameState::Playing;
+    }
+
+    fn return_to_code_menu(&mut self) {
+        self.state = GameState::EnteringCode;
+    }
+
+    pub fn get_state(&self) -> GameState { self.state }
+    pub fn get_game(&self) -> &Game { &self.game }
+    pub fn get_code(&self) -> [u8; 80] { self.game_code.code }
+}
+
+struct GameCode {
+    code: [u8; 80],
+    cursor: usize
+}
+
+impl GameCode {
+    fn new() -> Self {
+        Self { code: [0; 80], cursor: 0 }
+    }
+
+    fn type_char(&mut self, c: char) {
+        if self.cursor < self.code.len() {
+            self.code[self.cursor] = c as u8;
+            self.cursor += 1;
+        }
+    }
+
+    fn backspace(&mut self) {
+        if self.cursor > 0 {
+            self.cursor -= 1;
+            self.code[self.cursor] = 0;
+        }
+    }
+
+    fn hash(&self) -> u64 {
+        let mut x = 5040;
+        for i in 0..self.cursor {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x ^= self.code[i] as u64;
+        }
+        x
+    }
+}
 
 pub struct Game {
     board: [[u8; BOARD_HEIGHT]; BOARD_WIDTH],
@@ -254,8 +362,23 @@ impl Game { // TODO: most of these shouldn't be public
         self.score
     }
 
+    fn handle_input(&mut self, key: DecodedKey) {
+        use DecodedKey::*;
+        let action = match key {
+            RawKey(KeyCode::ArrowUp)    | Unicode('w') => Some(InputAction::Move(Direction::Up)),
+            RawKey(KeyCode::ArrowDown)  | Unicode('s') => Some(InputAction::Move(Direction::Down)),
+            RawKey(KeyCode::ArrowLeft)  | Unicode('a') => Some(InputAction::Move(Direction::Left)),
+            RawKey(KeyCode::ArrowRight) | Unicode('d') => Some(InputAction::Move(Direction::Right)),
+            Unicode('\n') | Unicode(' ') => Some(InputAction::Select),
+            _ => None
+        };
+        if let Some(action) = action {
+            self.do_action(action);
+        }
+    }
+
     /// Handles actions performed on the game.
-    pub fn do_action(&mut self, action: InputAction) {
+    fn do_action(&mut self, action: InputAction) {
         match action {
             InputAction::Select => self.selected = !self.selected,
             InputAction::Move(dir)  => {
