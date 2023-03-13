@@ -6,7 +6,7 @@ mod serial;
 mod match3game;
 
 use lazy_static::lazy_static;
-use match3game::{Game, InputAction};
+use match3game::{Game, InputAction, Direction};
 use pc_keyboard::{DecodedKey, KeyCode};
 use csci320_match3::HandlerTable;
 use spin::Mutex;
@@ -48,10 +48,10 @@ fn tick() {
 fn key(key: DecodedKey) {
     use DecodedKey::*;
     let action = match key {
-        RawKey(KeyCode::ArrowUp)    | Unicode('w') => Some(InputAction::Up),
-        RawKey(KeyCode::ArrowDown)  | Unicode('s') => Some(InputAction::Down),
-        RawKey(KeyCode::ArrowLeft)  | Unicode('a') => Some(InputAction::Left),
-        RawKey(KeyCode::ArrowRight) | Unicode('d') => Some(InputAction::Right),
+        RawKey(KeyCode::ArrowUp)    | Unicode('w') => Some(InputAction::Move(Direction::Up)),
+        RawKey(KeyCode::ArrowDown)  | Unicode('s') => Some(InputAction::Move(Direction::Down)),
+        RawKey(KeyCode::ArrowLeft)  | Unicode('a') => Some(InputAction::Move(Direction::Left)),
+        RawKey(KeyCode::ArrowRight) | Unicode('d') => Some(InputAction::Move(Direction::Right)),
         Unicode('\n') | Unicode(' ') => Some(InputAction::Select),
         _ => None
     };
@@ -95,13 +95,13 @@ fn draw_game(g: &Game) {
     }
     // score
     let ui_code = ColorCode::new(Color::White, Color::DarkGray);
-    plot_num_right_justified(35, g.get_score() as isize * 100, 25, vga_buffer::BUFFER_HEIGHT-1, ui_code);
+    plot_num_right_justified(match3game::BOARD_WIDTH*5-1, g.get_score() as isize * 100, DRAW_COL_OFFSET, vga_buffer::BUFFER_HEIGHT-1, ui_code);
     let msg = if g.is_alive() { "Score: " } else {"Game Over! Final Score:" };
-    plot_str(msg, 20, vga_buffer::BUFFER_HEIGHT-1, ui_code);
+    plot_str(msg, DRAW_COL_OFFSET, vga_buffer::BUFFER_HEIGHT-1, ui_code);
     // outline
     for row in 0..vga_buffer::BUFFER_HEIGHT {
         plot(' ', DRAW_COL_OFFSET - 1, row, ui_code);
-        plot(' ', DRAW_COL_OFFSET + 40, row, ui_code);
+        plot(' ', DRAW_COL_OFFSET + 39, row, ui_code);
     }
 }
 
@@ -113,20 +113,17 @@ fn draw_gem(c: usize, r: usize, color: Color, highlight: Color, selected: bool) 
     plot('-', c+1, r, code);
     plot('-', c+2, r, code);
     plot('\\', c+3, r, code);
-    plot(' ', c+4, r, code);
     plot('|', c, r+1, code);
     plot(center_char, c+1, r+1, inverse_code);
     plot(center_char, c+2, r+1, inverse_code);
     plot('|', c+3, r+1, code);
-    plot(' ', c+4, r+1, code);
     plot('\\', c, r+2, code);
     plot('-', c+1, r+2, code);
     plot('-', c+2, r+2, code);
     plot('/', c+3, r+2, code);
-    plot(' ', c+4, r+2, code);
 }
 fn draw_empty(c: usize, r: usize, color: Color) {
-    for c in c..c+5 {
+    for c in c..c+4 {
         for r in r..r+3 {
             plot(' ', c, r, ColorCode::new(color, color));
         }

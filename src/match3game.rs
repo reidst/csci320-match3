@@ -78,8 +78,9 @@ impl Game { // TODO: most of these shouldn't be public
     /// match-4 = 3 + 4 = 7 points
     /// match-n = 3 + 4 + ... + n points
     fn calculate_score(match_len: usize) -> usize {
-        let x = match_len as isize;
-        (x*x + x - 6) as usize / 2
+        let mut x = 0;
+        for i in 3..=match_len { x += i; }
+        x
     }
 
     /// Erase all marked gems, then reset the markings
@@ -135,39 +136,38 @@ impl Game { // TODO: most of these shouldn't be public
     }
 
     /// Swaps the piece under the cursor and the piece in the `dir` direction from the cursor.
-    fn swap_cursor(&mut self, dir: InputAction) {
+    fn swap_cursor(&mut self, dir: Direction) {
         match dir {
-            InputAction::Up => {
+            Direction::Up => {
                 if self.cursor.1 > 0 {
                     self.swap_cursor_raw(self.cursor.0, self.cursor.1 - 1);
                 }
             },
-            InputAction::Down => {
+            Direction::Down => {
                 if self.cursor.1 < BOARD_HEIGHT - 1 {
                     self.swap_cursor_raw(self.cursor.0, self.cursor.1 + 1);
                 }
             },
-            InputAction::Left => {
+            Direction::Left => {
                 if self.cursor.0 > 0 {
                     self.swap_cursor_raw(self.cursor.0 - 1, self.cursor.1);
                 }
             },
-            InputAction::Right => {
+            Direction::Right => {
                 if self.cursor.0 < BOARD_WIDTH - 1 {
                     self.swap_cursor_raw(self.cursor.0 + 1, self.cursor.1);
                 }
-            },
-            _ => {}
+            }
         }
     }
 
     /// Check if the swap that was just performed in the given direction makes any match.
-    fn makes_match(&self, dir: InputAction) -> bool {
+    fn makes_match(&self, dir: Direction) -> bool {
         let other_pos = match dir {
-            InputAction::Up    if self.cursor.1 > 0                 => (self.cursor.0, self.cursor.1 - 1),
-            InputAction::Down  if self.cursor.1 < BOARD_HEIGHT - 1  => (self.cursor.0, self.cursor.1 + 1),
-            InputAction::Left  if self.cursor.0 > 0                 => (self.cursor.0 - 1, self.cursor.1),
-            InputAction::Right if self.cursor.0 < BOARD_WIDTH - 1   => (self.cursor.0 + 1, self.cursor.1),
+            Direction::Up    if self.cursor.1 > 0                 => (self.cursor.0, self.cursor.1 - 1),
+            Direction::Down  if self.cursor.1 < BOARD_HEIGHT - 1  => (self.cursor.0, self.cursor.1 + 1),
+            Direction::Left  if self.cursor.0 > 0                 => (self.cursor.0 - 1, self.cursor.1),
+            Direction::Right if self.cursor.0 < BOARD_WIDTH - 1   => (self.cursor.0 + 1, self.cursor.1),
             _ => (self.cursor.0, self.cursor.1),
         };
         self.check_for_match(self.cursor.0, self.cursor.1) || self.check_for_match(other_pos.0, other_pos.1)
@@ -204,11 +204,11 @@ impl Game { // TODO: most of these shouldn't be public
         for col in 0..BOARD_WIDTH {
             for row in 0..BOARD_HEIGHT-1 {
                 self.cursor.set_cursor(col, row);
-                self.swap_cursor(InputAction::Down);
-                if self.makes_match(InputAction::Down) {
+                self.swap_cursor(Direction::Down);
+                if self.makes_match(Direction::Down) {
                     self.alive = true;
                 }
-                self.swap_cursor(InputAction::Down);
+                self.swap_cursor(Direction::Down);
                 if self.alive {
                     self.cursor.set_cursor(loc.0, loc.1);
                     return
@@ -220,11 +220,11 @@ impl Game { // TODO: most of these shouldn't be public
         for row in 0..BOARD_HEIGHT {
             for col in 0..BOARD_WIDTH-1 {
                 self.cursor.set_cursor(col, row);
-                self.swap_cursor(InputAction::Right);
-                if self.makes_match(InputAction::Right) {
+                self.swap_cursor(Direction::Right);
+                if self.makes_match(Direction::Right) {
                     self.alive = true;
                 }
-                self.swap_cursor(InputAction::Right);
+                self.swap_cursor(Direction::Right);
                 if self.alive {
                     self.cursor.set_cursor(loc.0, loc.1);
                     return
@@ -258,7 +258,7 @@ impl Game { // TODO: most of these shouldn't be public
     pub fn do_action(&mut self, action: InputAction) {
         match action {
             InputAction::Select => self.selected = !self.selected,
-            dir  => {
+            InputAction::Move(dir)  => {
                 if self.selected {
                     self.swap_cursor(dir);
                     if !self.makes_match(dir) {
@@ -276,7 +276,10 @@ impl Game { // TODO: most of these shouldn't be public
 }
 
 #[derive(Clone, Copy)]
-pub enum InputAction { Up, Down, Left, Right, Select }
+pub enum Direction { Up, Down, Left, Right }
+
+#[derive(Clone, Copy)]
+pub enum InputAction { Move(Direction), Select }
 
 pub struct GameCursor(usize, usize);
 
@@ -284,13 +287,12 @@ impl GameCursor {
     fn new() -> Self {
         Self(0, 0)
     }
-    fn move_cursor(&mut self, dir: InputAction) {
+    fn move_cursor(&mut self, dir: Direction) {
         match dir {
-            InputAction::Up => if self.1 > 0 { self.1 -= 1; },
-            InputAction::Down => if self.1 < BOARD_HEIGHT - 1 { self.1 += 1; },
-            InputAction::Left => if self.0 > 0 { self.0 -= 1; },
-            InputAction::Right => if self.0 < BOARD_WIDTH - 1 { self.0 += 1; },
-            _ => {}
+            Direction::Up    => if self.1 > 0                { self.1 -= 1; },
+            Direction::Down  => if self.1 < BOARD_HEIGHT - 1 { self.1 += 1; },
+            Direction::Left  => if self.0 > 0                { self.0 -= 1; },
+            Direction::Right => if self.0 < BOARD_WIDTH - 1  { self.0 += 1; }
         }
     }
     fn set_cursor(&mut self, c: usize, r: usize) {
