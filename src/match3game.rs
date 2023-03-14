@@ -20,18 +20,20 @@ impl GameStateManager {
     }
 
     pub fn input_manager(&mut self, key: DecodedKey) {
+        const K_BACKSPACE: char = 0x08 as char;
+        const K_ESCAPE: char = 0x1b as char;
         match self.state {
             GameState::EnteringCode => {
                 match key {
                     DecodedKey::Unicode('\n') => self.start_game(),
-                    DecodedKey::Unicode(c) if c.is_ascii_graphic() => self.game_code.type_char(c),
-                    DecodedKey::RawKey(KeyCode::Backspace) => self.game_code.backspace(),
+                    DecodedKey::Unicode(K_BACKSPACE) => self.game_code.backspace(),
+                    DecodedKey::Unicode(c @ ' '..='~') => self.game_code.type_char(c),
                     _ => {}
                 }
             },
             GameState::Playing => {
                 match key {
-                    DecodedKey::RawKey(KeyCode::Escape) if !self.game.alive => self.return_to_code_menu(),
+                    DecodedKey::Unicode(K_ESCAPE) if !self.game.alive => self.return_to_code_menu(),
                     key => self.game.handle_input(key)
                 }
             }
@@ -71,22 +73,23 @@ impl GameStateManager {
 
     pub fn get_state(&self) -> GameState { self.state }
     pub fn get_game(&self) -> &Game { &self.game }
-    pub fn get_code(&self) -> [u8; 80] { self.game_code.code }
+    pub fn get_code(&self) -> [char; 80] { self.game_code.code }
+    pub fn get_code_len(&self) -> usize { self.game_code.cursor }
 }
 
 struct GameCode {
-    code: [u8; 80],
+    code: [char; 80],
     cursor: usize
 }
 
 impl GameCode {
     fn new() -> Self {
-        Self { code: [0; 80], cursor: 0 }
+        Self { code: [0 as char; 80], cursor: 0 }
     }
 
     fn type_char(&mut self, c: char) {
         if self.cursor < self.code.len() {
-            self.code[self.cursor] = c as u8;
+            self.code[self.cursor] = c;
             self.cursor += 1;
         }
     }
@@ -94,7 +97,7 @@ impl GameCode {
     fn backspace(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
-            self.code[self.cursor] = 0;
+            self.code[self.cursor] = 0 as char;
         }
     }
 
@@ -305,7 +308,7 @@ impl Game { // TODO: most of these shouldn't be public
     }
 
     /// Check if there are any valid moves left
-    pub fn check_for_game_over(&mut self) {
+    pub fn check_for_game_over(&mut self) { // TODO: rewrite without mutating self
         self.alive = false;
         let loc = self.cursor.location();
         // search for vertical moves

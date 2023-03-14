@@ -23,12 +23,12 @@ lazy_static! {
 
 
 fn start() {
-    println!("Hello, world!");
 }
 
 fn tick() {
     let gsm = &mut *GAME.lock();
     gsm.tick(*TICK.lock());
+    // draw
     vga_buffer::clear_screen();
     match gsm.get_state() {
         GameState::EnteringCode => draw_code_menu(gsm),
@@ -52,8 +52,12 @@ pub extern "C" fn _start() -> ! {
 
 fn draw_code_menu(gsm: &GameStateManager) {
     plot_str("Enter a code:", 33, 12, ColorCode::new(Color::White, Color::Black));
-    let code = ""; // TODO
-    plot_str(code, 33, 13, ColorCode::new(Color::Yellow, Color::Black));
+    let code = gsm.get_code();
+    let mut write_pos = (vga_buffer::BUFFER_WIDTH - gsm.get_code_len()) / 2;
+    for c in 0..gsm.get_code_len() {
+        plot(code[c], write_pos, 13, ColorCode::new(Color::Yellow, Color::Black));
+        write_pos += 1;
+    }
 }
 
 fn draw_game(gsm: &GameStateManager) {
