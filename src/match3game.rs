@@ -2,8 +2,8 @@ use pc_keyboard::{DecodedKey, KeyCode};
 
 pub const BOARD_HEIGHT: usize = 8;
 pub const BOARD_WIDTH: usize = 8;
-pub const GEM_COUNT: usize = 7;
-pub const REFRESH_PERIOD: u64 = 4;
+const GEM_COUNT: usize = 7;
+const REFRESH_PERIOD: u64 = 4;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum GameState { EnteringCode, Playing }
@@ -11,12 +11,18 @@ pub enum GameState { EnteringCode, Playing }
 pub struct GameStateManager {
     state: GameState,
     game_code: GameCode,
-    game: Game
+    game: Game,
+    reset_safeguard: bool
 }
 
 impl GameStateManager {
     pub fn new() -> Self {
-        Self { state: GameState::EnteringCode, game_code: GameCode::new(), game: Game::new(0) }
+        Self {
+            state: GameState::EnteringCode,
+            game_code: GameCode::new(),
+            game: Game::new(0),
+            reset_safeguard: true
+        }
     }
 
     pub fn input_manager(&mut self, key: DecodedKey) {
@@ -33,8 +39,17 @@ impl GameStateManager {
             },
             GameState::Playing => {
                 match key {
-                    DecodedKey::Unicode(K_ESCAPE) if !self.game.alive => self.return_to_code_menu(),
-                    key => self.game.handle_input(key)
+                    DecodedKey::Unicode(K_ESCAPE) => {
+                        if self.game.alive && self.reset_safeguard {
+                            self.reset_safeguard = false;
+                        } else {
+                            self.return_to_code_menu();
+                        }
+                    },
+                    key => {
+                        self.game.handle_input(key);
+                        self.reset_safeguard = true;
+                    }
                 }
             }
         }
@@ -65,6 +80,7 @@ impl GameStateManager {
         let seed = self.game_code.hash();
         self.game = Game::new(seed);
         self.state = GameState::Playing;
+        self.reset_safeguard = true;
     }
 
     fn return_to_code_menu(&mut self) {
@@ -123,7 +139,7 @@ pub struct Game {
 }
 
 impl Game { // TODO: most of these shouldn't be public
-    pub fn new(seed: u64) -> Self {
+    fn new(seed: u64) -> Self {
         Self{
             board: [[0; BOARD_HEIGHT]; BOARD_WIDTH],
             rand: Random::new(seed),
@@ -135,7 +151,7 @@ impl Game { // TODO: most of these shouldn't be public
     }
 
     /// Find, score, and remove all existing matches.
-    pub fn score_matches(&mut self) {
+    fn score_matches(&mut self) {
         let marks = self.calculate_marks();
         self.remove_marked(marks);
     }
@@ -210,7 +226,7 @@ impl Game { // TODO: most of these shouldn't be public
     }
 
     /// Move all suspended gems down one space; returns whether any gems were moved.
-    pub fn drop_step(&mut self) -> bool {
+    fn drop_step(&mut self) -> bool {
         let mut ongoing = false;
         for col in 0..BOARD_WIDTH {
             let mut row = BOARD_HEIGHT - 2;
@@ -231,7 +247,7 @@ impl Game { // TODO: most of these shouldn't be public
     }
 
     /// Drop at most one gem into the top of all available columns; returns whether any gems were dropped.
-    pub fn fill_step(&mut self) -> bool {
+    fn fill_step(&mut self) -> bool {
         let mut any: bool = false;
         for col in 0..BOARD_WIDTH {
             if self.board[col][0] == 0 {
@@ -311,7 +327,7 @@ impl Game { // TODO: most of these shouldn't be public
     }
 
     /// Check if there are any valid moves left
-    pub fn check_for_game_over(&mut self) { // TODO: rewrite without mutating self
+    fn check_for_game_over(&mut self) { // TODO: rewrite without mutating self
         self.alive = false;
         let loc = self.cursor.location();
         // search for vertical moves
