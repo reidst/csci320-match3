@@ -10,9 +10,7 @@ use match3game::{GameState, GameStateManager};
 use pc_keyboard::DecodedKey;
 use csci320_match3::HandlerTable;
 use spin::Mutex;
-use vga_buffer::{plot, ColorCode, Color};
-
-use crate::vga_buffer::{plot_num_right_justified, plot_str};
+use vga_buffer::{plot, plot_num_right_justified, plot_str, clear_row, ColorCode, Color};
 
 lazy_static! {
     static ref TICK: Mutex<u64> = Mutex::new(0);
@@ -29,7 +27,6 @@ fn tick() {
     let gsm = &mut *GAME.lock();
     gsm.tick(*TICK.lock());
     // draw
-    vga_buffer::clear_screen();
     match gsm.get_state() {
         GameState::EnteringCode => draw_code_menu(gsm),
         GameState::Playing => draw_game(gsm)
@@ -38,7 +35,11 @@ fn tick() {
 }
 
 fn key(key: DecodedKey) {
+    let old_state = GAME.lock().get_state();
     GAME.lock().input_manager(key);
+    if GAME.lock().get_state() != old_state {
+        vga_buffer::clear_screen();
+    }
 }
 
 #[no_mangle]
@@ -52,6 +53,7 @@ pub extern "C" fn _start() -> ! {
 
 fn draw_code_menu(gsm: &GameStateManager) {
     plot_str("Enter a code:", 33, 12, ColorCode::new(Color::White, Color::Black));
+    clear_row(13, Color::Black);
     let code = gsm.get_code();
     let mut write_pos = (vga_buffer::BUFFER_WIDTH - gsm.get_code_len()) / 2;
     for c in 0..gsm.get_code_len() {
@@ -90,8 +92,14 @@ fn draw_game(gsm: &GameStateManager) {
     }
     // score
     let ui_code = ColorCode::new(Color::White, Color::DarkGray);
-    plot_num_right_justified(match3game::BOARD_WIDTH*5-1, g.get_score() as isize * 100, DRAW_COL_OFFSET, vga_buffer::BUFFER_HEIGHT-1, ui_code);
     let msg = if g.is_alive() { "Score: " } else {"Game Over! Final Score:" };
+    plot_num_right_justified(
+        match3game::BOARD_WIDTH*5-1-msg.len(),  // width of baord in chars
+        g.get_score() as isize * 100, 
+        DRAW_COL_OFFSET+msg.len(),              // start at end of msg
+        vga_buffer::BUFFER_HEIGHT-1,            // bottom row
+        ui_code
+    );
     plot_str(msg, DRAW_COL_OFFSET, vga_buffer::BUFFER_HEIGHT-1, ui_code);
     // outline
     for row in 0..vga_buffer::BUFFER_HEIGHT {

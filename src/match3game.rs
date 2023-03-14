@@ -5,7 +5,7 @@ pub const BOARD_WIDTH: usize = 8;
 pub const GEM_COUNT: usize = 7;
 pub const REFRESH_PERIOD: u64 = 4;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum GameState { EnteringCode, Playing }
 
 pub struct GameStateManager {
