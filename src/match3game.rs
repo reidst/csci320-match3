@@ -115,7 +115,6 @@ impl GameCode {
 
 pub struct Game {
     board: [[u8; BOARD_HEIGHT]; BOARD_WIDTH],
-    marks: [[bool; BOARD_HEIGHT]; BOARD_WIDTH],
     rand: Random,
     cursor: GameCursor,
     selected: bool,
@@ -127,7 +126,6 @@ impl Game { // TODO: most of these shouldn't be public
     pub fn new(seed: u64) -> Self {
         Self{
             board: [[0; BOARD_HEIGHT]; BOARD_WIDTH],
-            marks: [[false; BOARD_HEIGHT]; BOARD_WIDTH],
             rand: Random::new(seed),
             cursor: GameCursor::new(),
             selected: false,
@@ -138,43 +136,48 @@ impl Game { // TODO: most of these shouldn't be public
 
     /// Find, score, and remove all existing matches.
     pub fn score_matches(&mut self) {
-        self.calculate_marks();
-        self.remove_marked();
+        let marks = self.calculate_marks();
+        self.remove_marked(marks);
     }
 
     /// Find and mark any matches on the board; returns the score of those matches.
-    fn calculate_marks(&mut self) {
+    fn calculate_marks(&mut self) -> [[u8; BOARD_HEIGHT]; BOARD_WIDTH] {
         let mut points: usize = 0;
+        let mut marks = [[0u8; BOARD_HEIGHT]; BOARD_WIDTH];
+
         // find vertical matches
+        let direction = 1u8;
         for col in 0..BOARD_WIDTH {
             for row in 0..BOARD_HEIGHT-2 {
                 let current = self.board[col][row];
-                if current == 0 || self.marks[col][row] { continue; }
+                if current == 0 || marks[col][row] & direction != 0 { continue; }
                 if self.board[col][row+1] == current && self.board[col][row+2] == current {
-                    self.marks[col][row] = true;
-                    self.marks[col][row+1] = true;
-                    self.marks[col][row+2] = true;
+                    marks[col][row]   |= direction;
+                    marks[col][row+1] |= direction;
+                    marks[col][row+2] |= direction;
                     let mut size = 3;
                     while row + size < BOARD_HEIGHT && self.board[col][row+size] == current {
-                        self.marks[col][row+size] = true;
+                        marks[col][row+size] |= direction;
                         size += 1;
                     }
                     points += Self::calculate_score(size);
                 }
             }
         }
+
         // find horizontal matches
-        for row in 0..BOARD_HEIGHT {
-            for col in 0..BOARD_WIDTH-2 {
+        let direction = 2u8;
+        for col in 0..BOARD_WIDTH-2 {
+            for row in 0..BOARD_HEIGHT {
                 let current = self.board[col][row];
-                if current == 0 || self.marks[col][row] { continue; }
+                if current == 0 || marks[col][row] & direction != 0 { continue; }
                 if self.board[col+1][row] == current && self.board[col+2][row] == current {
-                    self.marks[col][row] = true;
-                    self.marks[col+1][row] = true;
-                    self.marks[col+2][row] = true;
+                    marks[col]  [row] |= direction;
+                    marks[col+1][row] |= direction;
+                    marks[col+2][row] |= direction;
                     let mut size = 3;
                     while col + size < BOARD_WIDTH && self.board[col+size][row] == current {
-                        self.marks[col+size][row] = true;
+                        marks[col+size][row] |= direction;
                         size += 1;
                     }
                     points += Self::calculate_score(size);
@@ -182,6 +185,7 @@ impl Game { // TODO: most of these shouldn't be public
             }
         }
         self.score += points;
+        marks
     }
 
     /// Scoring calculator:
@@ -195,12 +199,11 @@ impl Game { // TODO: most of these shouldn't be public
     }
 
     /// Erase all marked gems, then reset the markings
-    fn remove_marked(&mut self) {
+    fn remove_marked(&mut self, marks: [[u8; BOARD_HEIGHT]; BOARD_WIDTH]) {
         for col in 0..BOARD_WIDTH {
             for row in 0..BOARD_HEIGHT {
-                if self.marks[col][row] {
+                if marks[col][row] != 0 {
                     self.board[col][row] = 0;
-                    self.marks[col][row] = false;
                 }
             }
         }
