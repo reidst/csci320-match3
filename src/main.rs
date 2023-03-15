@@ -24,14 +24,21 @@ fn start() {
 }
 
 fn tick() {
+    *TICK.lock() += 1;
     let gsm = &mut *GAME.lock();
-    gsm.tick(*TICK.lock());
+    let tick = *TICK.lock();
+    gsm.tick(tick);
     // draw
     match gsm.get_state() {
-        GameState::EnteringCode => draw_code_menu(gsm),
+        GameState::EnteringCode => {
+            const FLASH_PERIOD: u64 = 10;
+            if tick % FLASH_PERIOD == 0 {
+                draw_logo(tick / FLASH_PERIOD);
+            }
+            draw_code_menu(gsm);
+        },
         GameState::Playing => draw_game(gsm)
     }
-    *TICK.lock() += 1;
 }
 
 fn key(key: DecodedKey) {
@@ -51,13 +58,38 @@ pub extern "C" fn _start() -> ! {
         .start()
 }
 
+fn draw_logo(tick: u64) {
+    const LOGO_HEIGHT: usize = 4;
+    const LOGO_LENGTH: usize = 43;
+    const LOGO_DRAW_ROW: usize = 5;
+    const LOGO_DRAW_COL: usize = (vga_buffer::BUFFER_WIDTH - LOGO_LENGTH) / 2;
+    const LETTER_OFFSETS: [usize; 8] = [0, 8, 14, 19, 23, 31, 38, LOGO_LENGTH];
+    const LETTER_COLORS: [u8; 7] = [9, 10, 11, 12, 13, 14, 15];
+    // ASCII art generated from https://texteditor.com/ascii-art/ using the "Meh" font
+    const LETTERS: &str = r" __  __        _        _       ____   _   |  \/  | __ _ | |_  __ | |_    |__ /  | |  | |\/| |/ _` ||  _|/ _||   \    |_ \  |_|  |_|  |_|\__/_| \__|\__||_||_|  |___/  (_)  ";
+    for letter in 0..LETTER_OFFSETS.len()-1 {
+        let chosen_color = LETTER_COLORS[(letter + tick as usize) % LETTER_COLORS.len()];
+        for row in 0..LOGO_HEIGHT {
+            let letter_start = LOGO_LENGTH * row + LETTER_OFFSETS[letter];
+            let letter_end = LOGO_LENGTH * row + LETTER_OFFSETS[letter + 1];
+            plot_str(
+                &LETTERS[letter_start..letter_end], 
+                LOGO_DRAW_COL + LETTER_OFFSETS[letter], 
+                LOGO_DRAW_ROW + row, 
+                ColorCode::new(Color::from(chosen_color), Color::Black)
+            );
+        }
+    }
+}
+
 fn draw_code_menu(gsm: &GameStateManager) {
-    plot_str("Enter a code:", 33, 12, ColorCode::new(Color::White, Color::Black));
-    clear_row(13, Color::Black);
+    const INPUT_HEIGHT: usize = 19;
+    plot_str("Enter a code:", 33, INPUT_HEIGHT, ColorCode::new(Color::White, Color::Black));
+    clear_row(INPUT_HEIGHT+1, Color::Black);
     let code = gsm.get_code();
     let mut write_pos = (vga_buffer::BUFFER_WIDTH - gsm.get_code_len()) / 2;
     for c in 0..gsm.get_code_len() {
-        plot(code[c], write_pos, 13, ColorCode::new(Color::Yellow, Color::Black));
+        plot(code[c], write_pos, INPUT_HEIGHT+1, ColorCode::new(Color::Yellow, Color::Black));
         write_pos += 1;
     }
 }
