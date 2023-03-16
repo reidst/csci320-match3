@@ -1,6 +1,6 @@
 [package]
 name = "csci320-match3"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Simon Reid <reidst@hendrix.edu>"]
 edition = "2021"
 license = "MIT"
