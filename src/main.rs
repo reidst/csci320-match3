@@ -42,9 +42,10 @@ fn tick() {
 }
 
 fn key(key: DecodedKey) {
-    let old_state = GAME.lock().get_state();
-    GAME.lock().input_manager(key);
-    if GAME.lock().get_state() != old_state {
+    let gsm = &mut *GAME.lock();
+    let old_state = gsm.get_state();
+    gsm.key(key);
+    if gsm.get_state() != old_state {
         vga_buffer::clear_screen();
     }
 }
@@ -60,13 +61,13 @@ pub extern "C" fn _start() -> ! {
 
 fn draw_logo(tick: u64) {
     const LOGO_HEIGHT: usize = 4;
-    const LOGO_LENGTH: usize = 43;
+    const LOGO_LENGTH: usize = 41;
     const LOGO_DRAW_ROW: usize = 5;
     const LOGO_DRAW_COL: usize = (vga_buffer::BUFFER_WIDTH - LOGO_LENGTH) / 2;
     const LETTER_OFFSETS: [usize; 8] = [0, 8, 14, 19, 23, 31, 38, LOGO_LENGTH];
     const LETTER_COLORS: [u8; 7] = [9, 10, 11, 12, 13, 14, 15];
     // ASCII art generated from https://texteditor.com/ascii-art/ using the "Meh" font
-    const LETTERS: &str = r" __  __        _        _       ____   _   |  \/  | __ _ | |_  __ | |_    |__ /  | |  | |\/| |/ _` ||  _|/ _||   \    |_ \  |_|  |_|  |_|\__/_| \__|\__||_||_|  |___/  (_)  ";
+    const LETTERS: &str = r" __  __        _        _       ____   _ |  \/  | __ _ | |_  __ | |_    |__ /  | || |\/| |/ _` ||  _|/ _||   \    |_ \  |_||_|  |_|\__/_| \__|\__||_||_|  |___/  (_)";
     for letter in 0..LETTER_OFFSETS.len()-1 {
         let chosen_color = LETTER_COLORS[(letter + tick as usize) % LETTER_COLORS.len()];
         for row in 0..LOGO_HEIGHT {

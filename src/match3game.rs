@@ -25,7 +25,7 @@ impl GameStateManager {
         }
     }
 
-    pub fn input_manager(&mut self, key: DecodedKey) {
+    pub fn key(&mut self, key: DecodedKey) {
         const K_BACKSPACE: char = 0x08 as char;
         const K_ESCAPE: char = 0x1b as char;
         match self.state {
@@ -47,7 +47,7 @@ impl GameStateManager {
                         }
                     },
                     key => {
-                        self.game.handle_input(key);
+                        self.game.key(key);
                         self.reset_safeguard = true;
                     }
                 }
@@ -59,19 +59,7 @@ impl GameStateManager {
         match self.state {
             GameState::EnteringCode => {},
             GameState::Playing => {
-                if current_tick % REFRESH_PERIOD == 0 {
-                    let drop = self.game.drop_step();
-                    let fill = self.game.fill_step();
-                    let settled = !drop && !fill;
-                    if settled {
-                        // only check for game over if board is settled and has no matches
-                        let old_score = self.game.get_score();
-                        self.game.score_matches();
-                        if self.game.get_score() == old_score {
-                            self.game.check_for_game_over();
-                        }
-                    }
-                }
+                self.game.tick(current_tick);
             },
         }
     }
@@ -138,7 +126,7 @@ pub struct Game {
     score: usize
 }
 
-impl Game { // TODO: most of these shouldn't be public
+impl Game {
     fn new(seed: u64) -> Self {
         Self{
             board: [[0; BOARD_HEIGHT]; BOARD_WIDTH],
@@ -156,7 +144,7 @@ impl Game { // TODO: most of these shouldn't be public
         self.remove_marked(marks);
     }
 
-    /// Find and mark any matches on the board; returns the score of those matches.
+    /// Find and mark any matches on the board, and update score based on those matches
     fn calculate_marks(&mut self) -> [[u8; BOARD_HEIGHT]; BOARD_WIDTH] {
         let mut points: usize = 0;
         let mut marks = [[0u8; BOARD_HEIGHT]; BOARD_WIDTH];
@@ -384,7 +372,7 @@ impl Game { // TODO: most of these shouldn't be public
         self.score
     }
 
-    fn handle_input(&mut self, key: DecodedKey) {
+    fn key(&mut self, key: DecodedKey) {
         use DecodedKey::*;
         let action = match key {
             RawKey(KeyCode::ArrowUp)    | Unicode('w') => Some(InputAction::Move(Direction::Up)),
@@ -396,6 +384,22 @@ impl Game { // TODO: most of these shouldn't be public
         };
         if let Some(action) = action {
             self.do_action(action);
+        }
+    }
+
+    fn tick(&mut self, current_tick: u64) {
+        if current_tick % REFRESH_PERIOD == 0 {
+            let drop = self.drop_step();
+            let fill = self.fill_step();
+            let settled = !drop && !fill;
+            if settled {
+                // only check for game over if board is settled and has no matches
+                let old_score = self.get_score();
+                self.score_matches();
+                if self.get_score() == old_score {
+                    self.check_for_game_over();
+                }
+            }
         }
     }
 
