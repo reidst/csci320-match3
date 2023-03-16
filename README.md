@@ -15,6 +15,7 @@ Ensure that Qemu is in your PATH and the command is run in the project's root di
 
 ## How to Play
 ![home_screen](screenshots/home_screen.png)
+
 When the game boots up, the home screen will open. From here, enter a text code up to 80 characters long to generate a procedurally random starting position, then press Enter.
 
 During the game, colored gems will fall from the top of the screen to fill any gaps on the board. If, when the gems settle, there are three or more gems of the same color in a row vertically or horizontally (called a "match"), those gems will disappear and score points. The player can swap any gem with an adjacent one if the swap creates a match. Once there are no more possible matches to make, the game ends.
