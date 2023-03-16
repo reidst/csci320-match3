@@ -8,7 +8,7 @@ _Match3!_ is a puzzle game inspired by Bejeweled and written in bare-metal Rust.
 Although it should theoretically run on any Intel x86-64 computer, I have had little success in doing so; for best results, run in a Qemu x86-64 emulator:
 
 ```
-qemu-system-x86_64 -drive format=raw,file=target\x86_64-blog_os\debug\bootimage-csci320-match3.bin
+qemu-system-x86_64 -drive format=raw,file=bootimage-csci320-match3.bin
 ```
 
 Ensure that Qemu is in your PATH and the command is run in the project's root directory.
