@@ -13,6 +13,35 @@ qemu-system-x86_64 -drive format=raw,file=bootimage-csci320-match3.bin
 
 Ensure that Qemu is in your PATH and the command is run in the project's root directory.
 
+## Building
+
+[Original instructions](https://os.phil-opp.com/minimal-rust-kernel/)
+
+```sh
+# Make sure you have nightly toolchain
+rustup toolchain list
+rustup toolchain install nightly
+# optional
+rustup default nightly
+
+# Attempting to build will give "no rust-src" error
+rustup component add rust-src --toolchain nightly-<host-triple>
+
+# Build the project
+cargo build
+
+# Create a bootable disk image
+cargo install bootimage
+# Install components
+rustup component add llvm-tools-preview
+
+# Build the disk image
+cargo bootimage
+
+# Run
+qemu-system-x86_64 -drive format=raw,file=target/x86_64-blog_os/debug/bootimage-csci320-match3.bin
+```
+
 ## How to Play
 ![home_screen](screenshots/home_screen.png)
 
